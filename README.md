@@ -75,6 +75,6 @@ Run in this order (each notebook: *Kernel → Restart & Run All*):
 3. `notebooks/feature_engineering.ipynb` → `data/processed/features_engineered.parquet`
 
 ## Team
-Dua Khurram     23L-0726
-Ayesha Shahid   23L-0589
-Ahmad 
+`Dua Khurram     23L-0726`
+`Ayesha Shahid   23L-0589`
+`Ahmed Shaukat   23L-0890`

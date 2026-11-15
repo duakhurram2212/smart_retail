@@ -77,4 +77,4 @@ Run in this order (each notebook: *Kernel → Restart & Run All*):
 ## Team
 Dua Khurram     23L-0726
 Ayesha Shahid   23L-0589
-Ahmad 
+Ahmed Shaukat   23L-0890

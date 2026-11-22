@@ -105,6 +105,67 @@ Run in this order (each notebook: *Kernel → Restart & Run All*):
 2. `notebooks/eda.ipynb` → figures in `outputs/figures/` (needs only `cleaned_merged.parquet`)
 3. `notebooks/feature_engineering.ipynb` → `data/processed/features_engineered.parquet` (needs `cleaned_merged.parquet` and `holidays_events.csv`)
 
+## Phase 2: Promotion Impact and Model Evaluation (Ahmed)
+
+This part answers two questions with the cleaned data from Phase 1, and then scores all models on the same test weeks.
+
+1. How much extra sales does a promotion really bring? (promotion lift)
+2. When one product family is on promotion, do sales of another family go down? (cannibalization)
+
+### Promotion lift and cannibalization
+Notebook: `notebooks/promo_lift_cannibalization.ipynb`
+
+**Method.** Comparing sales before and during a promotion is not fair, because sales also change due to weekdays, holidays, December and growth. So for every promotion we also look at other stores with no promotion on the same days. Their change is what we would expect anyway. The real lift is the difference. Confidence intervals use a bootstrap that resamples whole weeks.
+- Method A (launches): the first day of a promotion after 7 days with no promotion, compared with the 7 days before.
+- Method B (weekly surge): a week compared with the week before, when the number of promoted items jumps. This works for big families that are on promotion almost every day.
+
+**Main results**
+| Result | Value |
+|---|---|
+| Launches used (Method A) | 5,071 |
+| Naive lift (before vs during only) | 7.5% |
+| Adjusted lift, with comparison stores | 4.2% (95% CI 1.1% to 8.6%) |
+| Adjusted lift, weekly surges (Method B) | 3.8% (95% CI 1.6% to 6.2%) |
+| 1 day promotions | about 3.5% |
+| 7+ day promotions | about 16% |
+| Cannibalization | not detected |
+
+- The naive comparison overstates the lift. About half of it is normal change in sales, not the promotion.
+- Longer promotions show a bigger lift than short ones.
+- The size of the lift depends on how a launch is defined. With a 14 day "no promotion before" window the lift is 8.2%, and with a 3 day window it is 21.0%. It is positive every time. We use 7 days as the main setting.
+- Cannibalization: we tested 8 chosen pairs (substitutes and complements) and then all 162 family pairs, with a Benjamini-Hochberg correction. 5 pairs are significant and all 5 are positive. No pair shows a clear drop in sales.
+
+**Limits.** A product here is a whole product family, so we can only check cannibalization between families, not brands. `onpromotion` is a count of items, so we cannot measure the size of the discount. Stores choose when to promote, so some of the effect may be timing.
+
+Figures are in `outputs/figures_promo/` and tables are in `outputs/tables/`.
+
+### Evaluation of the forecasting models
+Notebook: `notebooks/evaluation_metrics.ipynb`
+
+All models are scored on the same test period: the last 4 weeks of the data (19 July to 15 August 2017), one week at a time, because the forecast horizon is 7 days. Models were trained only on data before 19 July. Two simple baselines are added, so we can see if the models beat a simple guess:
+- same day last week
+- average of the same weekday over the last 4 weeks
+
+Metrics: RMSLE, RMSE, MAPE (only rows with sales above 0), WAPE and R2. MAPE breaks on zero sales rows, so WAPE (total error / total sales) is the main percentage metric.
+
+| Model | RMSLE | RMSE | WAPE % | R2 |
+|---|---|---|---|---|
+| XGBoost | 0.397 | 214.9 | 12.6 | 0.971 |
+| Gradient Descent Regression (L1) | 0.446 | 261.1 | 16.1 | 0.957 |
+| Baseline: 4-week average | 0.467 | 254.7 | 15.6 | 0.958 |
+| Baseline: same day last week | 0.546 | 309.8 | 18.5 | 0.939 |
+
+- XGBoost has the lowest error. Its WAPE is 12.6% against 15.6% for the best baseline, and it has the lowest RMSLE in all 4 test weeks.
+- The regression is about the same as the simple 4-week average.
+- Best error on the big families: PRODUCE 8.3%, DAIRY 8.7%, GROCERY I 10.1%. Weakest big family: CLEANING at 21.6%. Very small families (for example BOOKS) have huge percentage errors, but they are almost 0% of sales.
+
+Figures are in `outputs/figures_eval/` and tables are in `outputs/tables/` (`eval_*.csv`). The predictions used are in `outputs/predictions/model_predictions.csv`.
+
+### How to run (these two notebooks)
+1. Generate `data/processed/features_engineered.parquet` by running `notebooks/feature_engineering.ipynb` (it is too large for GitHub).
+2. Open the notebooks from inside the `notebooks/` folder and use Kernel > Restart & Run All.
+3. `evaluation_metrics.ipynb` also needs `outputs/predictions/model_predictions.csv`.
+
 ## Team
 | Name | Roll No. |
 |---|---|

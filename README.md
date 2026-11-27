@@ -6,7 +6,7 @@ Cleaning, EDA and feature preparation for forecasting daily supermarket sales, u
 
 **Phase 2 (Modeling, Evaluation and Website)** covers the forecasting models, their comparison on a held-out test period, the promotion impact analysis, and a web app that shows the results.
 
-Live website: *(link will be added here if we deploy it)*
+Live website: [https://smartretaill.streamlit.app/](https://smartretaill.streamlit.app/)
 
 ## Problem Statement
 Predict the unit sales of each product family in each store for the **next 7 days**. Good forecasts help stores avoid stock-outs and overstocking (especially perishables).
@@ -199,19 +199,29 @@ Metrics: RMSLE, RMSE, MAPE (only rows with sales above 0), WAPE and R2. MAPE bre
 Figures are in `outputs/figures_eval/` and tables are in `outputs/tables/` (`eval_*.csv`). The predictions used are in `outputs/predictions/model_predictions.csv`.
 
 ## Website
-Code is in the `website/` folder. It is a small web app with three pages: forecast (real sales vs model predictions for a chosen store, product family and test week), model comparison, and promotion results. It shows the saved results of our trained models, it does not train anything.
+Code is in the `website/` folder. The shop has four pages: Shop floor, Stock the shelf, Scoreboard, and Offers. Stock the shelf scores the saved model `models/xgb_live.json` for a store number (1–54), an aisle, and a date. Allowed dates are 1 August 2015 through 16 August 2017. The forecast is the next 7 days. The app does not retrain. Scoreboard and Offers show the saved study results.
 
-To run it locally (after `pip install -r requirements.txt`):
+### Run it on your computer
+From the project folder, after `pip install -r requirements.txt`:
+
 ```bash
 python -m streamlit run website/app.py
 ```
-It needs `data/processed/cleaned_merged.parquet` and the files in `outputs/`. Live link: *(to be added if deployed)*
+
+Then open http://localhost:8501.
+
+The files it needs are already in the repo: `data/processed/cleaned_merged.parquet`, `models/xgb_live.json`, `models/live_meta.json`, and the CSV files in `outputs/tables/`.
+
+### Live site
+[https://smartretaill.streamlit.app/](https://smartretaill.streamlit.app/)
+
+It is deployed on Streamlit Community Cloud from this repo (`main`, main file `website/app.py`). The cloud app installs `website/requirements.txt` and runs on Python 3.12.
 
 ## Final Results and Conclusion
 - **Forecasting:** XGBoost is the best model. On the 4 test weeks its WAPE is 12.6%, against 15.6% for the best simple baseline (4-week same-weekday average) and 16.1% for the best regression. Its R2 is 0.971. It is most accurate on the big families (PRODUCE 8.3%, DAIRY 8.7%, GROCERY I 10.1%) and weakest on CLEANING (21.6%).
 - **Promotions:** a promotion raises sales by about 4% on average (95% CI 1.1% to 8.6%) once normal changes in sales are removed. Longer promotions give a bigger lift. We did not find clear cannibalization between product families.
 - **In practice:** a store can use the forecast to plan stock for the next 7 days, and can expect a small but positive gain from promotions.
-- **Limits:** the promotion result depends on how a launch is defined and is not a controlled experiment. Forecast errors are large for very small families. The website shows saved predictions and does not forecast live.
+- **Limits:** the promotion result depends on how a launch is defined and is not a controlled experiment. Forecast errors are large for very small families. The website scores a saved XGBoost model for one store and aisle. It does not retrain.
 
 ## Team
 | Name | Roll No. |

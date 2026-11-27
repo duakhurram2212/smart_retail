@@ -137,13 +137,13 @@ def load_history(parquet_path):
     df = pd.read_parquet(parquet_path, columns=HISTORY_COLUMNS)
     df['date'] = pd.to_datetime(df['date'])
     df = df[df['date'] >= HISTORY_START].copy()
-    df['family'] = df['family'].astype(str)
-    df['store_nbr'] = df['store_nbr'].astype(int)
-    df['store_type'] = df['store_type'].astype(str)
-    df['store_cluster'] = df['store_cluster'].astype(int)
+    df['family'] = df['family'].astype(str).astype('category')
+    df['store_nbr'] = df['store_nbr'].astype('int16')
+    df['store_type'] = df['store_type'].astype(str).astype('category')
+    df['store_cluster'] = df['store_cluster'].astype('int8')
     for col in ['onpromotion', 'transactions', 'dcoilwtico', 'sales',
                 'is_holiday_national', 'is_holiday_regional', 'is_holiday_local', 'is_event']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
     return df
 
 

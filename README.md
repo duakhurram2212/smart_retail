@@ -4,6 +4,10 @@ Cleaning, EDA and feature preparation for forecasting daily supermarket sales, u
 
 **Phase 1 (Data Preparation)** covers everything before modeling: data cleaning, exploratory data analysis (EDA), insights and feature preparation.
 
+**Phase 2 (Modeling, Evaluation and Website)** covers the forecasting models, their comparison on a held-out test period, the promotion impact analysis, and a web app that shows the results.
+
+Live website: *(link will be added here if we deploy it)*
+
 ## Problem Statement
 Predict the unit sales of each product family in each store for the **next 7 days**. Good forecasts help stores avoid stock-outs and overstocking (especially perishables).
 
@@ -17,7 +21,7 @@ Predict the unit sales of each product family in each store for the **next 7 day
 
 **Download links**
 - Raw data: see the Kaggle link above (place the 6 CSVs in `data/raw/`).
-- `features_engineered.parquet` (105 MB) is over GitHub's size limit, so it is not in the repo.Generate it by running `notebooks/feature_engineering.ipynb`.
+- `features_engineered.parquet` (105 MB) is over GitHub's size limit, so it is not in the repo.Generate it by running `phase1/feature_engineering.ipynb`.
 - `cleaned_merged.parquet` (20 MB) is included in `data/processed/`.
 
 ## Repository Structure
@@ -26,11 +30,22 @@ smart_retail/
 ├── data/
 │   ├── raw/                  # Kaggle CSVs (not in repo, download link above)
 │   └── processed/            # cleaned_merged.parquet, features_engineered.parquet, data dictionary
-├── notebooks/
+├── phase1/                   # Phase 1: data preparation
 │   ├── cleaning_merging.ipynb      # cleaning + merging the 6 tables
 │   ├── eda.ipynb                   # EDA, plots, findings and key insights
 │   └── feature_engineering.ipynb   # lag / rolling / calendar / promo features
-├── outputs/figures/          # saved EDA plots (16 images, see the table below)
+├── phase2/                   # Phase 2: modeling and evaluation
+│   ├── modeling.ipynb              # regression (gradient descent) and XGBoost, SHAP
+│   ├── promo_lift_cannibalization.ipynb  # promotion lift and cannibalization
+│   └── evaluation_metrics.ipynb    # all models and baselines on the same test weeks
+├── website/                  # web app (see "Website" below)
+├── outputs/
+│   ├── figures/              # EDA plots (Phase 1) and SHAP plots (Phase 2)
+│   ├── figures_promo/        # promotion lift and cannibalization plots
+│   ├── figures_eval/         # model comparison plots
+│   ├── tables/               # result tables (CSV)
+│   ├── predictions/          # model_predictions.csv (test period)
+│   └── metrics_table.csv     # scores of the regression models and XGBoost
 ├── requirements.txt
 └── README.md
 ```
@@ -63,10 +78,10 @@ smart_retail/
 9. **Stores:** store type and cluster matter. The median daily sales of a type A store (about 29.8k) is about 4× a type C store (about 7.2k), and the best cluster (5) sells about 6× more per row than the lowest (7).
 10. **Promotions:** 31 of 32 families sell more on promo rows, but this is a naive comparison, not the causal effect.
 
-The full list of insights is in the last cell of `notebooks/eda.ipynb`.
+The full list of insights is in the last cell of `phase1/eda.ipynb`.
 
 ## Visualizations
-All plots are shown in `notebooks/eda.ipynb` (each with a "Finding" note) and saved in `outputs/figures/`.
+All plots are shown in `phase1/eda.ipynb` (each with a "Finding" note) and saved in `outputs/figures/`.
 
 | Figure | What it tells us |
 |---|---|
@@ -92,18 +107,40 @@ Not applied. We plan to use tree-based models (XGBoost/LightGBM), which do not n
 
 ## How to Run
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/duakhurram2212/smart_retail.git
 cd smart_retail
 pip install -r requirements.txt
 # download the 6 Kaggle CSVs into data/raw/
 jupyter notebook
 ```
-The notebooks use relative paths (`../data/...`), so open them from inside the `notebooks/` folder.
+The notebooks use relative paths (`../data/...`, `../outputs/...`), so open each notebook from inside its own folder (`phase1/` or `phase2/`).
 
-Run in this order (each notebook: *Kernel → Restart & Run All*):
-1. `notebooks/cleaning_merging.ipynb` → `data/processed/cleaned_merged.parquet` (needs the raw CSVs)
-2. `notebooks/eda.ipynb` → figures in `outputs/figures/` (needs only `cleaned_merged.parquet`)
-3. `notebooks/feature_engineering.ipynb` → `data/processed/features_engineered.parquet` (needs `cleaned_merged.parquet` and `holidays_events.csv`)
+Run in this order (each notebook: *Kernel > Restart & Run All*):
+1. `phase1/cleaning_merging.ipynb` -> `data/processed/cleaned_merged.parquet` (needs the raw CSVs)
+2. `phase1/eda.ipynb` -> figures in `outputs/figures/` (needs only `cleaned_merged.parquet`)
+3. `phase1/feature_engineering.ipynb` -> `data/processed/features_engineered.parquet` (needs `cleaned_merged.parquet` and `holidays_events.csv`)
+4. `phase2/modeling.ipynb` -> `outputs/predictions/model_predictions.csv`, `outputs/metrics_table.csv`, SHAP plots (needs `features_engineered.parquet`)
+5. `phase2/promo_lift_cannibalization.ipynb` -> `outputs/figures_promo/` and `outputs/tables/` (needs `features_engineered.parquet` and `data/raw/train.csv`)
+6. `phase2/evaluation_metrics.ipynb` -> `outputs/figures_eval/` and `outputs/tables/eval_*.csv` (needs `model_predictions.csv` and `features_engineered.parquet`)
+
+## Phase 2: Forecasting Models (Ayesha)
+Notebook: `phase2/modeling.ipynb`
+
+- **Target:** `log1p(sales)`, predictions are converted back to normal sales before they are saved.
+- **Split:** models are trained on data before 19 July 2017 and tested on the last 4 weeks (19 July to 15 August 2017).
+- **Models:**
+  - Linear regression trained with gradient descent, written from scratch (no regularization, L2, L1). Checked against scikit-learn.
+  - XGBoost, tuned with a randomized search and early stopping.
+- **Feature importance:** SHAP plots for XGBoost are in `outputs/figures/` (`shap_comparison.png`, `shap_xgb_summary.png`).
+
+| Model | RMSLE | RMSE | MAPE % | R2 |
+|---|---|---|---|---|
+| GD (no regularization) | 0.4513 | 289.19 | 35.02 | 0.9474 |
+| GD + L2 | 0.4512 | 288.82 | 35.03 | 0.9475 |
+| GD + L1 | 0.4510 | 288.64 | 35.03 | 0.9476 |
+| XGBoost | 0.3971 | 214.91 | 31.91 | 0.9707 |
+
+The scores above come from `outputs/metrics_table.csv`. The full comparison with the baselines is in the evaluation section below.
 
 ## Phase 2: Promotion Impact and Model Evaluation (Ahmed)
 
@@ -113,7 +150,7 @@ This part answers two questions with the cleaned data from Phase 1, and then sco
 2. When one product family is on promotion, do sales of another family go down? (cannibalization)
 
 ### Promotion lift and cannibalization
-Notebook: `notebooks/promo_lift_cannibalization.ipynb`
+Notebook: `phase2/promo_lift_cannibalization.ipynb`
 
 **Method.** Comparing sales before and during a promotion is not fair, because sales also change due to weekdays, holidays, December and growth. So for every promotion we also look at other stores with no promotion on the same days. Their change is what we would expect anyway. The real lift is the difference. Confidence intervals use a bootstrap that resamples whole weeks.
 - Method A (launches): the first day of a promotion after 7 days with no promotion, compared with the 7 days before.
@@ -140,7 +177,7 @@ Notebook: `notebooks/promo_lift_cannibalization.ipynb`
 Figures are in `outputs/figures_promo/` and tables are in `outputs/tables/`.
 
 ### Evaluation of the forecasting models
-Notebook: `notebooks/evaluation_metrics.ipynb`
+Notebook: `phase2/evaluation_metrics.ipynb`
 
 All models are scored on the same test period: the last 4 weeks of the data (19 July to 15 August 2017), one week at a time, because the forecast horizon is 7 days. Models were trained only on data before 19 July. Two simple baselines are added, so we can see if the models beat a simple guess:
 - same day last week
@@ -161,10 +198,20 @@ Metrics: RMSLE, RMSE, MAPE (only rows with sales above 0), WAPE and R2. MAPE bre
 
 Figures are in `outputs/figures_eval/` and tables are in `outputs/tables/` (`eval_*.csv`). The predictions used are in `outputs/predictions/model_predictions.csv`.
 
-### How to run (these two notebooks)
-1. Generate `data/processed/features_engineered.parquet` by running `notebooks/feature_engineering.ipynb` (it is too large for GitHub).
-2. Open the notebooks from inside the `notebooks/` folder and use Kernel > Restart & Run All.
-3. `evaluation_metrics.ipynb` also needs `outputs/predictions/model_predictions.csv`.
+## Website
+Code is in the `website/` folder. It is a small web app with three pages: forecast (real sales vs model predictions for a chosen store, product family and test week), model comparison, and promotion results. It shows the saved results of our trained models, it does not train anything.
+
+To run it locally (after `pip install -r requirements.txt`):
+```bash
+python -m streamlit run website/app.py
+```
+It needs `data/processed/cleaned_merged.parquet` and the files in `outputs/`. Live link: *(to be added if deployed)*
+
+## Final Results and Conclusion
+- **Forecasting:** XGBoost is the best model. On the 4 test weeks its WAPE is 12.6%, against 15.6% for the best simple baseline (4-week same-weekday average) and 16.1% for the best regression. Its R2 is 0.971. It is most accurate on the big families (PRODUCE 8.3%, DAIRY 8.7%, GROCERY I 10.1%) and weakest on CLEANING (21.6%).
+- **Promotions:** a promotion raises sales by about 4% on average (95% CI 1.1% to 8.6%) once normal changes in sales are removed. Longer promotions give a bigger lift. We did not find clear cannibalization between product families.
+- **In practice:** a store can use the forecast to plan stock for the next 7 days, and can expect a small but positive gain from promotions.
+- **Limits:** the promotion result depends on how a launch is defined and is not a controlled experiment. Forecast errors are large for very small families. The website shows saved predictions and does not forecast live.
 
 ## Team
 | Name | Roll No. |

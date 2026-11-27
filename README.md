@@ -192,14 +192,14 @@ Metrics: RMSLE, RMSE, MAPE (only rows with sales above 0), WAPE and R2. MAPE bre
 | Baseline: 4-week average | 0.467 | 254.7 | 15.6 | 0.958 |
 | Baseline: same day last week | 0.546 | 309.8 | 18.5 | 0.939 |
 
-- XGBoost has the lowest error. Its WAPE is 12.6% against 15.6% for the best baseline, and it has the lowest RMSLE in all 4 test weeks.
+- XGBoost has the lowest error. Its WAPE is 12.6% against 15.6% for the best baseline, and it has the lowest RMSLE in all 4 test weeks. The live forecast uses a simplified version of the model (13.5% error); the scores in the evaluation come from the full model (12.6%).
 - The regression is about the same as the simple 4-week average.
 - Best error on the big families: PRODUCE 8.3%, DAIRY 8.7%, GROCERY I 10.1%. Weakest big family: CLEANING at 21.6%. Very small families (for example BOOKS) have huge percentage errors, but they are almost 0% of sales.
 
 Figures are in `outputs/figures_eval/` and tables are in `outputs/tables/` (`eval_*.csv`). The predictions used are in `outputs/predictions/model_predictions.csv`.
 
 ## Website
-Code is in the `website/` folder. The shop has four pages: Shop floor, Stock the shelf, Scoreboard, and Offers. Stock the shelf scores the saved model `models/xgb_live.json` for a store number (1–54), an aisle, and a date. Allowed dates are 1 August 2015 through 16 August 2017. The forecast is the next 7 days. The app does not retrain. Scoreboard and Offers show the saved study results.
+Code is in the `website/` folder. The shop has four pages: Shop floor, Stock the shelf, Scoreboard, and Offers. Stock the shelf scores the saved model `models/xgb_live.json` for a store number (1–54), an aisle, and a date. Allowed dates are 1 August 2015 through 16 August 2017. The forecast is the next 7 days. The app does not retrain. Scoreboard and Offers show the saved study results. The live forecast uses a simplified version of the model (13.5% error); the scores in the evaluation come from the full model (12.6%).
 
 ### Run it on your computer
 From the project folder, after `pip install -r requirements.txt`:

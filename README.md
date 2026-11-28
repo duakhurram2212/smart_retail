@@ -36,11 +36,15 @@ smart_retail/
 │   └── feature_engineering.ipynb   # lag / rolling / calendar / promo features
 ├── phase2/                   # Phase 2: modeling and evaluation
 │   ├── modeling.ipynb              # regression (gradient descent) and XGBoost, SHAP
+│   ├── train_models.ipynb           # trains and saves the final full models 
 │   ├── promo_lift_cannibalization.ipynb  # promotion lift and cannibalization
 │   └── evaluation_metrics.ipynb    # all models and baselines on the same test weeks
 ├── models/                   # trained model used by the website
 │   ├── xgb_live.json               # trained XGBoost (live forecast)
 │   └── live_meta.json              # feature list, codes and test score of that model
+│   ├── xgb_features.json           # feature names of the full XGBoost
+│   ├── gd_l1_model.npz             # full GD + L1 regression (weights, scaler)
+│   └── validation_metrics.csv      # test scores of the two full models
 ├── website/                  # web app (see "Website" below)
 │   ├── app.py                      # Streamlit app (4 pages)
 │   ├── live_model.py               # builds the model inputs and makes the forecast
@@ -113,7 +117,7 @@ All plots are shown in `phase1/eda.ipynb` (each with a "Finding" note) and saved
 | `store_type_cluster.png` | Store type A and clusters 5 and 11 sell the most; type C and clusters 7 and 15 the least. |
 
 ## Scaling / Normalization
-Not applied. We plan to use tree-based models (XGBoost/LightGBM), which do not need scaled features. The skewed target is handled with `log1p(sales)`. If a linear model is used in Phase 2, features will be scaled after the train/test split.
+Scaling is not applied to the data file, because the tree-based model (XGBoost) does not need it. For the gradient descent regression, features are log-transformed where skewed, one-hot encoded and standardized inside phase2/modeling.ipynb, with the scaler fit on the training data only. The skewed target is handled with log1p(sales).
 
 ## How to Run
 ```bash
@@ -130,17 +134,18 @@ Run in this order (each notebook: *Kernel > Restart & Run All*):
 2. `phase1/eda.ipynb` -> figures in `outputs/figures/` (needs only `cleaned_merged.parquet`)
 3. `phase1/feature_engineering.ipynb` -> `data/processed/features_engineered.parquet` (needs `cleaned_merged.parquet` and `holidays_events.csv`)
 4. `phase2/modeling.ipynb` -> `outputs/predictions/model_predictions.csv`, `outputs/metrics_table.csv`, SHAP plots (needs `features_engineered.parquet`)
-5. `phase2/promo_lift_cannibalization.ipynb` -> `outputs/figures_promo/` and `outputs/tables/` (needs `features_engineered.parquet` and `data/raw/train.csv`)
-6. `phase2/evaluation_metrics.ipynb` -> `outputs/figures_eval/` and `outputs/tables/eval_*.csv` (needs `model_predictions.csv` and `features_engineered.parquet`)
+5. `phase2/train_models.ipynb` -> `models/gd_l1_model.npz`, `models/xgb_features.json`, `models/validation_metrics.csv` (and `models/xgb_model.json`, if you run it) (needs    `features_engineered.parquet`)
+6. `phase2/promo_lift_cannibalization.ipynb` -> `outputs/figures_promo/` and `outputs/tables/` (needs `features_engineered.parquet` and `data/raw/train.csv`)
+7. `phase2/evaluation_metrics.ipynb` -> `outputs/figures_eval/` and `outputs/tables/eval_*.csv` (needs `model_predictions.csv` and `features_engineered.parquet`)
 
 ## Phase 2: Forecasting Models (Ayesha)
-Notebook: `phase2/modeling.ipynb`
+Notebook: `phase2/modeling.ipynb` (full experiments). `phase2/train_models.ipynb` saves the final models into models/.
 
 - **Target:** `log1p(sales)`, predictions are converted back to normal sales before they are saved.
-- **Split:** models are trained on data before 19 July 2017 and tested on the last 4 weeks (19 July to 15 August 2017).
+- **Split:** models are trained on data before 19 July 2017 and tested on the last 4 weeks (19 July to 15 August 2017), one week at a time. A time-based split is used instead of random cross-validation, because shuffled folds would let the model see the future. XGBoost early stopping uses the last 14 days of the training period.
 - **Models:**
-  - Linear regression trained with gradient descent, written from scratch (no regularization, L2, L1). Checked against scikit-learn.
-  - XGBoost, tuned with a randomized search and early stopping.
+  1. Linear regression trained with gradient descent, written from scratch (no regularization, L2, L1), checked against scikit-learn (LinearRegression, Ridge, Lasso). A lambda sweep chose L1 with lambda = 0.01 (learning rate 0.05, 500 epochs).
+  2. XGBoost, tuned with a randomized search (10 configurations) and early stopping. Best: max_depth 10, learning_rate 0.03, subsample 1.0, colsample_bytree 0.8, min_child_weight 1, 502 trees.
 - **Feature importance:** SHAP plots for XGBoost are in `outputs/figures/` (`shap_comparison.png`, `shap_xgb_summary.png`).
 
 | Model | RMSLE | RMSE | MAPE % | R2 |
@@ -148,7 +153,10 @@ Notebook: `phase2/modeling.ipynb`
 | GD (no regularization) | 0.4513 | 289.19 | 35.02 | 0.9474 |
 | GD + L2 | 0.4512 | 288.82 | 35.03 | 0.9475 |
 | GD + L1 | 0.4510 | 288.64 | 35.03 | 0.9476 |
+| GD + L1 (best, lambda = 0.01) | 0.4459 | 261.07 | 35.76 | 0.9569 |
 | XGBoost | 0.3971 | 214.91 | 31.91 | 0.9707 |
+
+- **SHAP:** do the simple and the complex model agree? Both models rely mostly on recent sales history. sales_lag_7d is the top feature for both (18.3% of GD importance, 34.3% for XGBoost). The two feature rankings have a Spearman correlation of 0.67, and 8 of the top 10 features are the same. The difference is that GD spreads importance over several correlated lags (for example sales_lag_14d is rank 3 for GD but rank 8 for XGBoost), while XGBoost also uses weekday and promotion features (day_of_week, promo_intensity_vs_28d, family_promo_stores) that the linear model almost ignores. Plots: outputs/figures/shap_comparison.png and shap_xgb_summary.png.
 
 The scores above come from `outputs/metrics_table.csv`. The full comparison with the baselines is in the evaluation section below.
 
@@ -232,6 +240,7 @@ It is deployed on Streamlit Community Cloud from this repo (`main`, main file `w
 - **Promotions:** a promotion raises sales by about 4% on average (95% CI 1.1% to 8.6%) once normal changes in sales are removed. Longer promotions give a bigger lift. We did not find clear cannibalization between product families.
 - **In practice:** a store can use the forecast to plan stock for the next 7 days, and can expect a small but positive gain from promotions.
 - **Limits:** the promotion result depends on how a launch is defined and is not a controlled experiment. Forecast errors are large for very small families. The website scores a saved XGBoost model for one store and aisle. It does not retrain.
+- **Why XGBoost won:** the linear model can only add up effects, while XGBoost can learn interactions, because the effect of a lag or a promotion differs by store, product family and weekday. The SHAP comparison supports this: both models use recent sales history, but XGBoost also uses weekday and promotion features that the linear model hardly uses. The regression remains a useful explainable baseline, and its from-scratch results match scikit-learn.
 
 ## Team
 | Name | Roll No. |

@@ -316,7 +316,7 @@ if page.endswith('Stock the shelf'):
     try:
         model, meta = load_live()
     except Exception as exc:
-        st.error('The trained model file is missing. From the project folder run: py website/train_live_model.py')
+        st.error('The forecast model could not be loaded.')
         st.caption(str(exc))
         st.stop()
     if 'city_codes' not in meta:

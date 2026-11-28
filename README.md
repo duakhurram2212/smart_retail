@@ -39,18 +39,21 @@ smart_retail/
 │   ├── train_models.ipynb           # trains and saves the final full models 
 │   ├── promo_lift_cannibalization.ipynb  # promotion lift and cannibalization
 │   └── evaluation_metrics.ipynb    # all models and baselines on the same test weeks
-├── models/                   # trained model used by the website
-│   ├── xgb_live.json               # trained XGBoost (live forecast)
-│   └── live_meta.json              # feature list, codes and test score of that model
-│   ├── xgb_features.json           # feature names of the full XGBoost
+├── models/                   # saved weights used by the notebooks and the website
+│   ├── xgb_live.json               # full XGBoost used by the live forecast
+│   ├── live_meta.json              # feature list, codes and test score of that model
+│   ├── xgb_features.json           # the 52 feature names
 │   ├── gd_l1_model.npz             # full GD + L1 regression (weights, scaler)
-│   └── validation_metrics.csv      # test scores of the two full models
-├── website/                  # web app (see "Website" below)
+│   └── validation_metrics.csv      # test scores of XGBoost and GD + L1
+├── website/                  # the only web app (see "Website" below)
 │   ├── app.py                      # Streamlit app (4 pages)
-│   ├── live_model.py               # builds the model inputs and makes the forecast
-│   ├── train_live_model.py         # trains the model and saves it to models/
+│   ├── live_model.py               # builds the 52 inputs and makes the forecast
+│   ├── train_live_model.py         # trains the full XGBoost and saves it to models/
 │   ├── requirements.txt            # libraries used by the deployed app
-│   └── *.jpg                       # page photos
+│   ├── market_hero.jpg             # generated banner, Shop floor
+│   ├── stock_shelf.jpg             # generated banner, Stock the shelf
+│   ├── score_vs.jpg                # generated banner, Scoreboard
+│   └── promo_offer.jpg             # generated banner, Offers
 ├── .streamlit/
 │   └── config.toml           # app colours
 ├── outputs/
@@ -210,14 +213,18 @@ Metrics: RMSLE, RMSE, MAPE (only rows with sales above 0), WAPE and R2. MAPE bre
 | Baseline: 4-week average | 0.467 | 254.7 | 15.6 | 0.958 |
 | Baseline: same day last week | 0.546 | 309.8 | 18.5 | 0.939 |
 
-- XGBoost has the lowest error. Its WAPE is 12.6% against 15.6% for the best baseline, and it has the lowest RMSLE in all 4 test weeks. The live forecast uses a simplified version of the model (13.5% error); the scores in the evaluation come from the full model (12.6%).
+- XGBoost has the lowest error. Its WAPE is 12.6% against 15.6% for the best baseline, and it has the lowest RMSLE in all 4 test weeks. The live forecast on the website is this same model.
 - The regression is about the same as the simple 4-week average.
 - Best error on the big families: PRODUCE 8.3%, DAIRY 8.7%, GROCERY I 10.1%. Weakest big family: CLEANING at 21.6%. Very small families (for example BOOKS) have huge percentage errors, but they are almost 0% of sales.
 
 Figures are in `outputs/figures_eval/` and tables are in `outputs/tables/` (`eval_*.csv`). The predictions used are in `outputs/predictions/model_predictions.csv`.
 
 ## Website
-Code is in the `website/` folder. The shop has four pages: Shop floor, Stock the shelf, Scoreboard, and Offers. Stock the shelf scores the saved model `models/xgb_live.json` for a store number (1–54), an aisle, and a date. Allowed dates are 1 August 2015 through 16 August 2017. The forecast is the next 7 days. The app does not retrain. Scoreboard and Offers show the saved study results. The live forecast uses a simplified version of the model (13.5% error); the scores in the evaluation come from the full model (12.6%).
+There is one website. The app is `website/app.py`. `models/` only stores saved weights, not a second site.
+
+The shop has four pages: Shop floor, Stock the shelf, Scoreboard, and Offers. Stock the shelf scores `models/xgb_live.json`, which is the Phase 2 XGBoost: 52 features, 502 trees, max depth 10, learning rate 0.03, subsample 1.0, colsample_bytree 0.8, min_child_weight 1. The 502 trees are the count early stopping chose in `phase2/modeling.ipynb`. `website/train_live_model.py` fits that same specification and writes `models/xgb_live.json` and `models/live_meta.json`. The app does not retrain while it is open. Scoreboard and Offers show the saved study results. The held-out WAPE of this model is 12.6%, the same number as the scoreboard.
+
+The week list on Stock the shelf has only the four held-out weeks (19 July to 15 August 2017) and the next week (16 to 22 August 2017), which has no recorded sales. A week before 19 July 2017 was used in training, so a percent error there would not be a fair test. The forecast is the next 7 days.
 
 ### Run it on your computer
 From the project folder, after `pip install -r requirements.txt`:
@@ -228,7 +235,16 @@ python -m streamlit run website/app.py
 
 Then open http://localhost:8501.
 
-The files it needs are already in the repo: `data/processed/cleaned_merged.parquet`, `models/xgb_live.json`, `models/live_meta.json`, and the CSV files in `outputs/tables/`.
+To rebuild the live weights from `data/processed/cleaned_merged.parquet`:
+
+```bash
+python website/train_live_model.py
+```
+
+The files the app needs are already in the repo: `data/processed/cleaned_merged.parquet`, `models/xgb_live.json`, `models/live_meta.json`, and the CSV files in `outputs/tables/`.
+
+### Banner photos
+The four banners in `website/` were generated for this project: `market_hero.jpg`, `stock_shelf.jpg`, `score_vs.jpg`, and `promo_offer.jpg`. They are not stock photographs and do not use a third-party licence.
 
 ### Live site
 [https://smartretaill.streamlit.app/](https://smartretaill.streamlit.app/)
@@ -239,7 +255,7 @@ It is deployed on Streamlit Community Cloud from this repo (`main`, main file `w
 - **Forecasting:** XGBoost is the best model. On the 4 test weeks its WAPE is 12.6%, against 15.6% for the best simple baseline (4-week same-weekday average) and 16.1% for the best regression. Its R2 is 0.971. It is most accurate on the big families (PRODUCE 8.3%, DAIRY 8.7%, GROCERY I 10.1%) and weakest on CLEANING (21.6%).
 - **Promotions:** a promotion raises sales by about 4% on average (95% CI 1.1% to 8.6%) once normal changes in sales are removed. Longer promotions give a bigger lift. We did not find clear cannibalization between product families.
 - **In practice:** a store can use the forecast to plan stock for the next 7 days, and can expect a small but positive gain from promotions.
-- **Limits:** the promotion result depends on how a launch is defined and is not a controlled experiment. Forecast errors are large for very small families. The website scores a saved XGBoost model for one store and aisle. It does not retrain.
+- **Limits:** the promotion result depends on how a launch is defined and is not a controlled experiment. Forecast errors are large for very small families. The website scores the saved full XGBoost for one store and aisle. It does not retrain.
 - **Why XGBoost won:** the linear model can only add up effects, while XGBoost can learn interactions, because the effect of a lag or a promotion differs by store, product family and weekday. The SHAP comparison supports this: both models use recent sales history, but XGBoost also uses weekday and promotion features that the linear model hardly uses. The regression remains a useful explainable baseline, and its from-scratch results match scikit-learn.
 
 ## Team

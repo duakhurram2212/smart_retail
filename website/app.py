@@ -9,7 +9,7 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import live_model
 importlib.reload(live_model)
-from live_model import default_plan
+from live_model import TEST_START, default_plan, test_weeks
 from live_model import load_history as load_sales_history
 from live_model import load_xgb, predict_week
 
@@ -258,7 +258,8 @@ if page.endswith('Shop floor'):
     st.caption(
         f'For every 100 units sold, XGBoost was off by about {xgb_wape:.0f}. '
         f'A simple “same weekday, last 4 weeks” guess was off by about {simple_wape:.0f}. '
-        f'The fair promotion lift is {main["adjusted %"]:.1f}%, and no family pair showed a clear drop in sales.'
+        f'The fair promotion lift is {main["adjusted %"]:.1f}%, and no family pair showed a clear drop in sales. '
+        'Stock the shelf uses this same XGBoost.'
     )
 
     st.subheader('The 33 aisles')
@@ -303,10 +304,13 @@ if page.endswith('Shop floor'):
 
 
 if page.endswith('Stock the shelf'):
-    page_heading('Stock the shelf', 'Type a store, tap an aisle, pick a date', 'stock_shelf.jpg')
+    page_heading('Stock the shelf', 'Type a store, tap an aisle, pick a held-out week', 'stock_shelf.jpg')
     st.write(
-        'Type the store number, tap an aisle, and pick a date the calendar will accept. '
-        'Only 1 August 2015 through 16 August 2017 are open. The model fills the next 7 days.'
+        'Type the store number, tap an aisle, and pick a week. '
+        'The model fills the next 7 days. Only the four held-out test weeks '
+        '(19 July to 15 August 2017) and the week after the records stop are listed. '
+        'Weeks before 19 July 2017 were used to train the model, so a percent error on those weeks '
+        'would look better than a real forecast.'
     )
 
     try:
@@ -314,6 +318,12 @@ if page.endswith('Stock the shelf'):
     except Exception as exc:
         st.error('The trained model file is missing. From the project folder run: py website/train_live_model.py')
         st.caption(str(exc))
+        st.stop()
+    if 'city_codes' not in meta:
+        st.error(
+            'The saved forecast is the old simplified model. '
+            'From the project folder run: py website/train_live_model.py'
+        )
         st.stop()
 
     history = sales_history()
@@ -330,18 +340,18 @@ if page.endswith('Stock the shelf'):
     family = st.session_state.aisle
     st.markdown('**On the counter:** ' + icon_for(family) + ' ' + family)
 
-    first_open = pd.Timestamp('2015-08-01').date()
-    last_open = pd.Timestamp('2017-08-16').date()
+    weeks = test_weeks()
+    week_labels = [label for label, _, _ in weeks]
     with st.form('forecast_form'):
         c1, c2 = st.columns(2)
         store = c1.number_input('Store number, 1 to 54', min_value=1, max_value=54, value=1, step=1)
-        week_day = c2.date_input('Date', value=last_open, min_value=first_open, max_value=last_open)
+        week_label = c2.selectbox('Week', week_labels, index=0)
         submitted = st.form_submit_button('Fill this shelf', type='primary')
 
     if not submitted:
         st.stop()
 
-    week_start = pd.Timestamp(week_day)
+    week_start = {label: start for label, start, _ in weeks}[week_label]
 
     plan = default_plan(history, store, family, week_start)
     rows = predict_week(history, model, meta, store, family, week_start, plan)
@@ -369,10 +379,15 @@ if page.endswith('Stock the shelf'):
         total = show['Real sales'].sum()
         live_miss = 100 * (show['Forecast'] - show['Real sales']).abs().sum() / total
         simple_miss = 100 * (show['Repeat last 4 weeks'] - show['Real sales']).abs().sum() / total
+        fair = (
+            'This week was held out of training, so this percent is a fair test.'
+            if week_start >= TEST_START
+            else 'This week is inside the training period, so this percent is not a fair test.'
+        )
         st.success(
             f'Store {store}, {family}. The model forecasts {guessed:,.0f} units. '
             f'The store sold {total:,.0f}. The forecast was off by {live_miss:.1f}% of the units sold. '
-            f'Repeating the last 4 weeks was off by {simple_miss:.1f}%.'
+            f'Repeating the last 4 weeks was off by {simple_miss:.1f}%. {fair}'
         )
     elif known:
         st.info('This store sold none of this family in this week, so a percent error would not mean anything.')
@@ -386,8 +401,10 @@ if page.endswith('Stock the shelf'):
 
     st.line_chart(show)
     st.caption(
-        'The line is the model’s answer for the store, aisle and week you typed. '
-        f'On the four recorded test weeks, this same model missed {meta["test_wape"]}% of units.'
+        'The line is this XGBoost’s answer for the store, aisle and week you picked. '
+        f'It is the Phase 2 model (52 clues, 502 trees). '
+        f'On the four held-out weeks it missed {float(meta["test_wape"]):.1f}% of units, '
+        'the same score as the scoreboard.'
     )
 
 
@@ -396,7 +413,8 @@ if page.endswith('Scoreboard'):
     page_heading('Scoreboard', 'XGBoost against the simple guesses', 'score_vs.jpg')
     st.write(
         'Every method was scored on the same 4 hidden weeks, one week at a time. '
-        'Training stopped on 18 July 2017. The models never saw the test days while they were learning.'
+        'Training stopped on 18 July 2017. The models never saw the test days while they were learning. '
+        'Stock the shelf uses this same XGBoost, not a second model.'
     )
 
     summary = load_table('eval_summary.csv').set_index('model')

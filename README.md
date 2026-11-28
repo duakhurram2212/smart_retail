@@ -38,7 +38,17 @@ smart_retail/
 │   ├── modeling.ipynb              # regression (gradient descent) and XGBoost, SHAP
 │   ├── promo_lift_cannibalization.ipynb  # promotion lift and cannibalization
 │   └── evaluation_metrics.ipynb    # all models and baselines on the same test weeks
+├── models/                   # trained model used by the website
+│   ├── xgb_live.json               # trained XGBoost (live forecast)
+│   └── live_meta.json              # feature list, codes and test score of that model
 ├── website/                  # web app (see "Website" below)
+│   ├── app.py                      # Streamlit app (4 pages)
+│   ├── live_model.py               # builds the model inputs and makes the forecast
+│   ├── train_live_model.py         # trains the model and saves it to models/
+│   ├── requirements.txt            # libraries used by the deployed app
+│   └── *.jpg                       # page photos
+├── .streamlit/
+│   └── config.toml           # app colours
 ├── outputs/
 │   ├── figures/              # EDA plots (Phase 1) and SHAP plots (Phase 2)
 │   ├── figures_promo/        # promotion lift and cannibalization plots
